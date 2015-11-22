@@ -193,12 +193,12 @@ void CLifeGAMEView::Start(int a){
 	}
 	//if fast start
 	else if (a == 3){
-		g_Workspace.hFieldMutex = CreateMutex(NULL, FALSE, NULL);
+		g_Workspace.hFieldMutex = CreateMutex(NULL, TRUE, NULL);
 		g_Workspace.hRunMutex = CreateMutex(NULL, TRUE, NULL);
 		if (!SetTimer(IDT_TIMER1, 1000, NULL)){
-			_beginthread(this->FastStartProc, 4096, NULL);
 			ReleaseMutex(g_Workspace.hRunMutex);
 			RedrawWindow();
+			_beginthread(this->FastStartProc, 4096, NULL);
 			if (g_Workspace.stop == 1){ KillTimer(IDT_TIMER1); }
 		}
 		g_Workspace.fast_start_condition = 1;
@@ -266,8 +266,7 @@ void CLifeGAMEView::FastStartProc(void * ipMyID)
 		g_Workspace.last = g_Workspace.that;
 		g_Workspace.that = g_Workspace.new_t;
 	}
-	while (WaitForSingleObject(g_Workspace.hRunMutex, INFINITE)==TRUE);
-	
+	while (WaitForSingleObject(g_Workspace.hRunMutex, 75L) == WAIT_TIMEOUT);
 }
 
 //next function main handler for life game algorithm
