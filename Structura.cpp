@@ -11,7 +11,7 @@ if (!SetTimer(IDT_TIMER1, 1000, NULL)){
 CloseHandle(g_Workspace.hFieldMutex);
 CloseHandle(g_Workspace.hRunMutex);
 
-structura procedyru FastStart
+structura procedyru FastStartProc
 
         do
 	{
