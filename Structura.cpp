@@ -1,4 +1,5 @@
-кнопка Fast start
+structura knopku Fast start
+
 g_Workspace.hFieldMutex = CreateMutex(NULL, TRUE, NULL);
 g_Workspace.hRunMutex = CreateMutex(NULL, TRUE, NULL);
 if (!SetTimer(IDT_TIMER1, 1000, NULL)){
@@ -10,16 +11,16 @@ if (!SetTimer(IDT_TIMER1, 1000, NULL)){
 CloseHandle(g_Workspace.hFieldMutex);
 CloseHandle(g_Workspace.hRunMutex);
 
-структура процедури FastStart
+structura procedyru FastStart
+
         do
 	{
 		WaitForSingleObject(g_Workspace.hFieldMutex, INFINITE);
 		\\\\\\\\\\\\\
-		виконую дії алгоритму гри
+		vukonuemo algorutm zminu polya
 		\\\\\\\\\\\\\
 		ReleaseMutex(g_Workspace.hFieldMutex);	
-		присвоюю загальному полю значення обрахованого
-		g_Workspace.last = g_Workspace.that;
+		zminyemo znachennya osnovnogo polya
 		g_Workspace.that = g_Workspace.new_t;
 	}
 	while (WaitForSingleObject(g_Workspace.hRunMutex, 75L) == WAIT_TIMEOUT);
