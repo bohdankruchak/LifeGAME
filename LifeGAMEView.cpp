@@ -12,6 +12,7 @@
 #include <fstream>
 #include <string>
 #include <thread>
+#include <sstream>
 #include "atltypes.h"
 #include "LifeGAMEView.h"
 #include "Workspace.h"
@@ -34,6 +35,10 @@ LRESULT CLifeGAMEView::OnPaint(UINT uMsg, WPARAM /*wParam*/, LPARAM /*lParam*/ ,
 	g_Workspace.op.rc_y_main = rcClient.Height() / g_Workspace.op.size_of_rect * g_Workspace.op.size_of_rect;
 	int count_x_1, count_y_1;
 	
+	LPWSTR s1;
+	g_Workspace.fToString(g_Workspace.op.all_steps, s1);
+	myStatic.SetWindowTextW(s1);
+	myStatic.RedrawWindow();
 	//change size of field with rcClient size
 	if (g_Workspace.op.change_with_window == 1 && (g_Workspace.op.x_main != rcClient.Width() / g_Workspace.op.size_of_rect * g_Workspace.op.size_of_rect || g_Workspace.op.y_main != rcClient.Height() / g_Workspace.op.size_of_rect * g_Workspace.op.size_of_rect)){
 		g_Workspace.op.x_main = rcClient.Width() / g_Workspace.op.size_of_rect * g_Workspace.op.size_of_rect;
@@ -54,7 +59,7 @@ LRESULT CLifeGAMEView::OnPaint(UINT uMsg, WPARAM /*wParam*/, LPARAM /*lParam*/ ,
 	//if size were 
 
 	//if window was resized or scrolled cleans view or some options were changed
-	if (g_Workspace.ers_bkg_param == 1 || g_Workspace.scroll_param == 1 || g_Workspace.set_change == 1){ dc.FillSolidRect(0, 0, rcClient.Width(), rcClient.Height(), RGB(255, 255, 255)); }
+	if (g_Workspace.ers_bkg_param == 1 || g_Workspace.scroll_param == 1 || g_Workspace.set_change == 1){ dc.FillSolidRect(0, 0, rcClient.Width(), rcClient.Height(), RGB(255, 255, 255));}
 
 	
 	//draw fields
@@ -108,30 +113,34 @@ LRESULT CLifeGAMEView::EraseBKG(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM lParam,
 
 LRESULT CLifeGAMEView::OnLMouseDown(UINT uMsg, WPARAM /*wParam*/, LPARAM lParam, BOOL& /*bHandled*/)
 {
-	//cope last and that to prev step
-	g_Workspace.that_old = g_Workspace.that;
-	g_Workspace.last_old = g_Workspace.last;
+	//if fast start not turn
+	if (g_Workspace.fast_start_condition!=1)
+	{
+		//cope last and that to prev step
+		g_Workspace.that_old = g_Workspace.that;
+		g_Workspace.last_old = g_Workspace.last;
 
-	int xPos = LOWORD(lParam) + g_Workspace.x_for_scroll;
-	int yPos = HIWORD(lParam) + g_Workspace.y_for_scroll;
-	if (xPos < g_Workspace.op.x_main && yPos < g_Workspace.op.y_main){
-		if (g_Workspace.that.ret_value(xPos, yPos, true) == true && g_Workspace.shapes == 0){
-			g_Workspace.that.del(xPos, yPos, true);
-			RedrawWindow();
+		int xPos = LOWORD(lParam) + g_Workspace.x_for_scroll;
+		int yPos = HIWORD(lParam) + g_Workspace.y_for_scroll;
+		if (xPos < g_Workspace.op.x_main && yPos < g_Workspace.op.y_main){
+			if (g_Workspace.that.ret_value(xPos, yPos, true) == true && g_Workspace.shapes == 0){
+				g_Workspace.that.del(xPos, yPos, true);
+				RedrawWindow();
+			}
+			else if (g_Workspace.that.ret_value(xPos, yPos, true) == false && g_Workspace.shapes == 0){
+				g_Workspace.that.put(xPos, yPos, true);
+				RedrawWindow();
+			}
+			else if (g_Workspace.shapes != 0){
+				Shapes(xPos / g_Workspace.op.size_of_rect, yPos / g_Workspace.op.size_of_rect);
+				RedrawWindow();
+			}
 		}
-		else if (g_Workspace.that.ret_value(xPos, yPos, true) == false && g_Workspace.shapes == 0){
-			g_Workspace.that.put(xPos, yPos, true);
-			RedrawWindow();
-		}
-		else if (g_Workspace.shapes != 0){
-			Shapes(xPos / g_Workspace.op.size_of_rect, yPos / g_Workspace.op.size_of_rect);
-			RedrawWindow();
-		}
+
+		//update last array
+		g_Workspace.last = g_Workspace.that;
+		g_Workspace.l_mouse_ev = 1;
 	}
-
-	//update last array
-	g_Workspace.last = g_Workspace.that;
-	g_Workspace.l_mouse_ev = 1;
 	return 0;
 }
 
@@ -187,31 +196,25 @@ void CLifeGAMEView::Start(int a){
 	BOOL ab = TRUE;
 	//if normal start
 	if (a == 0){
+		g_Workspace.start_cond = 1;
 		if (!SetTimer(IDT_TIMER1, g_Workspace.op.timer_sec, NULL)){
 			MyTimerProc(NULL, NULL, NULL, ab);
 		}
 	}
 	//if fast start
 	else if (a == 3){
-		g_Workspace.hFieldMutex = CreateMutex(NULL, TRUE, NULL);
-		g_Workspace.hRunMutex = CreateMutex(NULL, TRUE, NULL);
+		g_Workspace.start_cond = 2;
 		if (!SetTimer(IDT_TIMER1, 1000, NULL)){
-			ReleaseMutex(g_Workspace.hRunMutex);
-			RedrawWindow();
-			_beginthread(this->FastStartProc, 4096, NULL);
-			if (g_Workspace.stop == 1){ KillTimer(IDT_TIMER1); }
-		}
+			MyTimerProc(NULL, NULL, NULL, ab);
+		}	
+		g_Workspace.hRunMutex = CreateMutex(NULL, FALSE, NULL);
 		g_Workspace.fast_start_condition = 1;
-		
-		
-		/*CreateThread(NULL, 0, FastStartProc, &g_Workspace.hRunMutex, 0, NULL);*/
-
-		
-		CloseHandle(g_Workspace.hFieldMutex);
-		CloseHandle(g_Workspace.hRunMutex);
 	}
 	//if pressed next step key
-	else if (a == 1){ MyTimerProc(NULL, NULL, NULL, ab); }
+	else if (a == 1){ 
+		g_Workspace.start_cond = 1;
+		MyTimerProc(NULL, NULL, NULL, ab); }
+
 	//if pressed prev step key
 	else if (a == 2){
 		g_Workspace.that.clear();
@@ -227,56 +230,73 @@ void CLifeGAMEView::Start(int a){
 
 void CLifeGAMEView::FastStartProc(void * ipMyID)
 {
-	do
+	
+	int i = 0;
+	DWORD dwWaitResult = NULL;
+	
+	g_Workspace.m_cs.Lock();
+	m1 = g_Workspace;
+	g_Workspace.m_cs.Unlock();
+	while (i<70)
 	{
-		WaitForSingleObject(g_Workspace.hFieldMutex, INFINITE);
-		//cope last and that to prev step
-		g_Workspace.that_old = g_Workspace.that;
-		g_Workspace.last_old = g_Workspace.last;
-
-		Workspace::neighbors nb, nb_temp;
-		int ans = 1;
-		ans = 0;
-		int coord_x = 0, coord_y = 0;
-		g_Workspace.new_t.clear();
-		for (int i = 0; i < g_Workspace.that.index; i++){
-			g_Workspace.that.ret_coord(i, coord_x, coord_y);
-			nb = g_Workspace.that.get_neighbors(coord_x / g_Workspace.op.size_of_rect, coord_y / g_Workspace.op.size_of_rect);
-			for (int j = 1; j < 9; j++){
-				nb_temp = g_Workspace.that.get_neighbors(nb.el[j].x, nb.el[j].y);
-				if (g_Workspace.that.ret_value(nb.el[j].x, nb.el[j].y, false) == true){
-					if (nb_temp.count == 2 || nb_temp.count == 3){
-						if (g_Workspace.new_t.ret_value(nb.el[j].x, nb.el[j].y, false) == false)
-						{
-							g_Workspace.new_t.put(nb.el[j].x, nb.el[j].y, false); ans = 1;
+		g_Workspace.m_cs.Lock();
+		if (g_Workspace.fast_start_func_exit == FALSE)
+		{ 
+			break; 
+		}
+		g_Workspace.m_cs.Unlock();
+			m1.that_old = m1.that;
+			m1.last_old = m1.last;
+			Workspace::neighbors nb, nb_temp;
+			int ans = 1;
+			ans = 0;
+			int coord_x = 0, coord_y = 0;
+			m1.new_t.clear();
+			for (int i = 0; i < m1.that.index; i++){
+				m1.that.ret_coord(i, coord_x, coord_y);
+				nb = m1.that.get_neighbors(coord_x / m1.op.size_of_rect, coord_y / m1.op.size_of_rect);
+				for (int j = 1; j < 9; j++){
+					nb_temp = m1.that.get_neighbors(nb.el[j].x, nb.el[j].y);
+					if (m1.that.ret_value(nb.el[j].x, nb.el[j].y, false) == true){
+						if (nb_temp.count == 2 || nb_temp.count == 3){
+							if (m1.new_t.ret_value(nb.el[j].x, nb.el[j].y, false) == false)
+							{
+								m1.new_t.put(nb.el[j].x, nb.el[j].y, false); ans = 1;
+							}
 						}
 					}
-				}
-				else if (g_Workspace.that.ret_value(nb.el[j].x, nb.el[j].y, false) == false){
-					if (nb_temp.count == 3){
-						if (g_Workspace.new_t.ret_value(nb.el[j].x, nb.el[j].y, false) == false)
-						{
-							g_Workspace.new_t.put(nb.el[j].x, nb.el[j].y, false);
+					else if (m1.that.ret_value(nb.el[j].x, nb.el[j].y, false) == false){
+						if (nb_temp.count == 3){
+							if (m1.new_t.ret_value(nb.el[j].x, nb.el[j].y, false) == false)
+							{
+								m1.new_t.put(nb.el[j].x, nb.el[j].y, false);
+							}
 						}
 					}
 				}
 			}
+			if (ans == 0){ m1.stop = 1; }
+			m1.that = m1.new_t;
+			m1.op.all_steps++;
+			i++;
 		}
-		ReleaseMutex(g_Workspace.hFieldMutex);	
-		g_Workspace.last = g_Workspace.that;
-		g_Workspace.that = g_Workspace.new_t;
-	}
-	while (WaitForSingleObject(g_Workspace.hRunMutex, 75L) == WAIT_TIMEOUT);
+	
+		ReleaseMutex(m1.hFieldMutex);
+		g_Workspace.m_cs.Lock();
+		g_Workspace = m1;
+		g_Workspace.m_cs.Unlock();
+		_endthread();
+
+		
 }
 
-//next function main handler for life game algorithm
-LRESULT CLifeGAMEView::MyTimerProc(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/){
-	
+void CLifeGAMEView::StartProc()
+{
 	//cope last and that to prev step
 	g_Workspace.that_old = g_Workspace.that;
 	g_Workspace.last_old = g_Workspace.last;
 	
-	Workspace::neighbors nb,nb_temp;
+	Workspace::neighbors nb, nb_temp;
 	int ans = 1;
 	ans = 0;
 	int coord_x = 0, coord_y = 0;
@@ -287,28 +307,75 @@ LRESULT CLifeGAMEView::MyTimerProc(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lP
 		for (int j = 1; j < 9; j++){
 			nb_temp = g_Workspace.that.get_neighbors(nb.el[j].x, nb.el[j].y);
 			if (g_Workspace.that.ret_value(nb.el[j].x, nb.el[j].y, false) == true){
-				if (nb_temp.count == 2 || nb_temp.count == 3){ 
+				if (nb_temp.count == 2 || nb_temp.count == 3){
 					if (g_Workspace.new_t.ret_value(nb.el[j].x, nb.el[j].y, false) == false)
-						{ g_Workspace.new_t.put(nb.el[j].x, nb.el[j].y, false); ans = 1; }
+					{
+						g_Workspace.new_t.put(nb.el[j].x, nb.el[j].y, false); ans = 1;
+					}
 				}
 			}
 			else if (g_Workspace.that.ret_value(nb.el[j].x, nb.el[j].y, false) == false){
-				if (nb_temp.count == 3){ if(g_Workspace.new_t.ret_value(nb.el[j].x, nb.el[j].y, false) == false)
-					{g_Workspace.new_t.put(nb.el[j].x, nb.el[j].y, false);} 
+				if (nb_temp.count == 3){
+					if (g_Workspace.new_t.ret_value(nb.el[j].x, nb.el[j].y, false) == false)
+					{
+						g_Workspace.new_t.put(nb.el[j].x, nb.el[j].y, false);
+					}
 				}
 			}
 		}
 	}
 	if (ans == 0){ g_Workspace.stop = 1; }
-
+	g_Workspace.op.all_steps++;
 	g_Workspace.last = g_Workspace.that;
 	g_Workspace.that = g_Workspace.new_t;
 	RedrawWindow();
-	if (g_Workspace.stop == 1){ KillTimer(IDT_TIMER1); }
+}
+
+//next function main handler for life game algorithm
+LRESULT CLifeGAMEView::MyTimerProc(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*lParam*/){
+	
+	
+	if (g_Workspace.start_cond == 1) {
+		StartProc();
+	
+	}
+	if (g_Workspace.stop == 1){
+		CloseHandle(g_Workspace.hFieldMutex);
+		CloseHandle(g_Workspace.hRunMutex);
+		KillTimer(IDT_TIMER1);
+		KillTimer(IDT_TIMER2);
+		g_Workspace.op.all_steps = 0;
+		g_Workspace.fast_start_condition = 0;
+	}
+	else if (g_Workspace.start_cond == 2){
+		g_Workspace.m_cs.Lock();
+		g_Workspace.fast_start_func_exit = FALSE;
+		g_Workspace.m_cs.Unlock();
+		Sleep(100);
+		g_Workspace.m_cs.Lock();
+		g_Workspace.fast_start_func_exit = TRUE;
+		g_Workspace.m_cs.Unlock();
+		
+		_beginthread(this->FastStartProc, 0, this);
+		WaitForSingleObject(g_Workspace.hFieldMutex, INFINITE);
+		g_Workspace.m_cs.Lock();
+		RedrawWindow();
+		g_Workspace.last = g_Workspace.that;
+		g_Workspace.m_cs.Unlock();
+		/*if (g_Workspace.ghWriteEvent != NULL){
+
+			SetEvent(g_Workspace.ghWriteEvent);
+
+			ResetEvent(g_Workspace.ghWriteEvent);
+			CloseHandle(g_Workspace.ghWriteEvent);
+		}
+		*/
+	}
 	return 0;
 }
 void CLifeGAMEView::Stop(){
 	g_Workspace.stop = 1;
+
 }
 
 void CLifeGAMEView::ScrollProc(int param){
@@ -536,7 +603,7 @@ void CLifeGAMEView::Clear(){
 	g_Workspace.new_t.clear();
 	g_Workspace.last_old.clear();
 	g_Workspace.that_old.clear();
-
+	g_Workspace.op.all_steps = 0;
 	g_Workspace.x_for_scroll = 0;
 	g_Workspace.y_for_scroll = 0;
 	RedrawWindow();
@@ -549,6 +616,12 @@ void CLifeGAMEView::SetSize(int x,int y){
 }
 LRESULT CLifeGAMEView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/){
 	g_Workspace.op.x_main = 300;
+	g_Workspace.ghWriteEvent = CreateEvent(NULL, TRUE, FALSE, L"FirstStep");
+	myStatic.Create(this->GetParent(), CRect(210, 30, 310, 50), L"", WS_CHILD | WS_VISIBLE | SS_CENTER);
+	/*_beginthread(this->AllStepProc, 0, NULL);
+	LPWSTR s1;
+	g_Workspace.fToString(g_Workspace.op.all_steps, s1);
+	myStatic.SetWindowTextW(s1);*/
 	g_Workspace.op.y_main = 300;
 	g_Workspace.op.infinite_field = 1;
 	g_Workspace.op.open_file = 0;
@@ -560,6 +633,7 @@ LRESULT CLifeGAMEView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lPara
 	g_Workspace.that.size_of_rect = g_Workspace.op.size_of_rect;
 	g_Workspace.last = g_Workspace.that;
 	g_Workspace.new_t = g_Workspace.that;
+	
 	//g_Workspace.els = g_Workspace.that;
 	//g_Workspace.old = g_Workspace.that;
 //	ShowScrollBar(SB_BOTH, 1);
@@ -848,4 +922,17 @@ void CLifeGAMEView::Shapes(int x,int y){
 	}
 	g_Workspace.stop = 0;
 }
+//void CLifeGAMEView::AllStepProc(void * idP){
+//	do{
+//		if (g_Workspace.op.all_steps != g_Workspace.op.all_steps_old){
+//			g_Workspace.op.all_steps_old = g_Workspace.op.all_steps;
+//			LPWSTR s1;
+//			/*SetWindowTextW(s1);
+//			RedrawWindow();*/
+//		}
+//		g_Workspace.op.all_steps++;
+//		Sleep(500);
+//	} while (TRUE);
+//}
+
 
