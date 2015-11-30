@@ -1,3 +1,4 @@
+
 // LifeGAMEView.cpp : implementation of the CLifeGAMEView class
 //
 /////////////////////////////////////////////////////////////////////////////
@@ -204,10 +205,12 @@ void CLifeGAMEView::Start(int a){
 	//if fast start
 	else if (a == 3){
 		g_Workspace.start_cond = 2;
+		_beginthread(this->FastStartProc, 0, this);
+		g_Workspace.eWrite = CreateEvent(NULL, FALSE, FALSE, NULL);
+		g_Workspace.eStop = CreateEvent(NULL, TRUE, TRUE, NULL);
 		if (!SetTimer(IDT_TIMER1, 1000, NULL)){
 			MyTimerProc(NULL, NULL, NULL, ab);
-		}	
-		g_Workspace.hRunMutex = CreateMutex(NULL, FALSE, NULL);
+		}
 		g_Workspace.fast_start_condition = 1;
 	}
 	//if pressed next step key
@@ -229,22 +232,16 @@ void CLifeGAMEView::Start(int a){
 }
 
 void CLifeGAMEView::FastStartProc(void * ipMyID)
-{
-	
+{	
 	int i = 0;
-	DWORD dwWaitResult = NULL;
 	
 	g_Workspace.m_cs.Lock();
 	m1 = g_Workspace;
 	g_Workspace.m_cs.Unlock();
-	while (i<70)
+	while (TRUE)
 	{
-		g_Workspace.m_cs.Lock();
-		if (g_Workspace.fast_start_func_exit == FALSE)
-		{ 
-			break; 
-		}
-		g_Workspace.m_cs.Unlock();
+		if (!WaitForSingleObject(g_Workspace.eWrite, 0) == WAIT_OBJECT_0)
+		{
 			m1.that_old = m1.that;
 			m1.last_old = m1.last;
 			Workspace::neighbors nb, nb_temp;
@@ -275,19 +272,15 @@ void CLifeGAMEView::FastStartProc(void * ipMyID)
 					}
 				}
 			}
-			if (ans == 0){ m1.stop = 1; }
 			m1.that = m1.new_t;
 			m1.op.all_steps++;
-			i++;
 		}
-	
-		ReleaseMutex(m1.hFieldMutex);
-		g_Workspace.m_cs.Lock();
-		g_Workspace = m1;
-		g_Workspace.m_cs.Unlock();
-		_endthread();
-
-		
+		if (!WaitForSingleObject(g_Workspace.eStop, 0) == WAIT_OBJECT_0)
+		{ 
+			break; 
+		}
+	}
+	_endthread();	
 }
 
 void CLifeGAMEView::StartProc()
@@ -295,7 +288,7 @@ void CLifeGAMEView::StartProc()
 	//cope last and that to prev step
 	g_Workspace.that_old = g_Workspace.that;
 	g_Workspace.last_old = g_Workspace.last;
-	
+
 	Workspace::neighbors nb, nb_temp;
 	int ans = 1;
 	ans = 0;
@@ -333,45 +326,31 @@ void CLifeGAMEView::StartProc()
 
 //next function main handler for life game algorithm
 LRESULT CLifeGAMEView::MyTimerProc(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*lParam*/){
+	g_Workspace.fast_start_func_exit = FALSE;
 	
 	
 	if (g_Workspace.start_cond == 1) {
 		StartProc();
-	
 	}
 	if (g_Workspace.stop == 1){
-		CloseHandle(g_Workspace.hFieldMutex);
-		CloseHandle(g_Workspace.hRunMutex);
+		SetEvent(g_Workspace.eStop);
 		KillTimer(IDT_TIMER1);
 		KillTimer(IDT_TIMER2);
+		CloseHandle(g_Workspace.eWrite);
+		CloseHandle(g_Workspace.eStop);
 		g_Workspace.op.all_steps = 0;
 		g_Workspace.fast_start_condition = 0;
 	}
 	else if (g_Workspace.start_cond == 2){
+		SetEvent(g_Workspace.eWrite);
 		g_Workspace.m_cs.Lock();
-		g_Workspace.fast_start_func_exit = FALSE;
+		m1.last = g_Workspace.that;
+		g_Workspace = m1;
 		g_Workspace.m_cs.Unlock();
-		Sleep(100);
-		g_Workspace.m_cs.Lock();
-		g_Workspace.fast_start_func_exit = TRUE;
-		g_Workspace.m_cs.Unlock();
-		
-		_beginthread(this->FastStartProc, 0, this);
-		WaitForSingleObject(g_Workspace.hFieldMutex, INFINITE);
-		g_Workspace.m_cs.Lock();
 		RedrawWindow();
-		g_Workspace.last = g_Workspace.that;
-		g_Workspace.m_cs.Unlock();
-		/*if (g_Workspace.ghWriteEvent != NULL){
-
-			SetEvent(g_Workspace.ghWriteEvent);
-
-			ResetEvent(g_Workspace.ghWriteEvent);
-			CloseHandle(g_Workspace.ghWriteEvent);
-		}
-		*/
+		if (g_Workspace.stop == 1){  }
+		return 0;
 	}
-	return 0;
 }
 void CLifeGAMEView::Stop(){
 	g_Workspace.stop = 1;
@@ -616,7 +595,7 @@ void CLifeGAMEView::SetSize(int x,int y){
 }
 LRESULT CLifeGAMEView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/){
 	g_Workspace.op.x_main = 300;
-	g_Workspace.ghWriteEvent = CreateEvent(NULL, TRUE, FALSE, L"FirstStep");
+
 	myStatic.Create(this->GetParent(), CRect(210, 30, 310, 50), L"", WS_CHILD | WS_VISIBLE | SS_CENTER);
 	/*_beginthread(this->AllStepProc, 0, NULL);
 	LPWSTR s1;
@@ -728,11 +707,12 @@ LRESULT CMainFrame::OnFileOpen(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCt
 		fin.open(d, ios::in);
 		int index_of_arr;
 		fin >> g_Workspace.op.x_main >> a >> g_Workspace.op.y_main >> a >> g_Workspace.op.change_with_window >> a >> g_Workspace.op.size_of_rect >> a >> g_Workspace.op.timer_sec >> a >> g_Workspace.shapes >> a >> index_of_arr >> a;
+		m_view.ResizeAll();
 		m_view.RedrawWindow();
 		for (int z = 0; z < index_of_arr; z++){
 			int x, y;
 			fin >> x >> a >> y >> a;
-			g_Workspace.that.put(x, y, true);
+			g_Workspace.that.put(x, y, false);
 		}
 	}
 	g_Workspace.els = g_Workspace.that;
@@ -934,5 +914,3 @@ void CLifeGAMEView::Shapes(int x,int y){
 //		Sleep(500);
 //	} while (TRUE);
 //}
-
-
