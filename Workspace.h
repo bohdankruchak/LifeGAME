@@ -1,5 +1,11 @@
 #include "stdafx.h"
 #include <vector>
+#include <cstring> 
+#include <string>  
+#include <iostream>
+#include <sstream>
+#include <iomanip>
+
 #include "windows.h"
 #include "atltypes.h"
 
@@ -59,15 +65,17 @@ private:
 				x = (x / size_of_rect)*size_of_rect;
 				y = (y / size_of_rect)*size_of_rect;
 			}
+			x = x / size_of_rect;
+			y = y / size_of_rect;
 			int i = 0;
-			if (ret_value(x, y, true) == true)
+			if (ret_value(x, y,false) == true)
 			{
 				for (i = 0; i <= index; i++){
 					if (coord[i].x == x && coord[i].y == y)break;
 				}
 				std::swap(coord[i], coord.back());
 				coord.pop_back();
-				a[x / size_of_rect][y / size_of_rect] = 0;
+				a[x][y] = 0;
 				index--;
 			}
 		}
@@ -81,14 +89,16 @@ private:
 				x = (x / size_of_rect)*size_of_rect;
 				y = (y / size_of_rect)*size_of_rect;
 			}
-			if (x < size_x && y < size_y && x >= 0 && y >= 0)
+			x = x / size_of_rect;
+			y = y / size_of_rect;
+			if (x < size_x / size_of_rect && y < size_y / size_of_rect && x >= 0 && y >= 0)
 			{
 				CPoint c;
 				c.x = x;
 				c.y = y;
-				if (a[x / size_of_rect][y / size_of_rect] != 1)
+				if (a[x][y] != 1)
 				{
-					a[x / size_of_rect][y / size_of_rect] = 1;
+					a[x][y] = 1;
 					coord.push_back(c);
 					index++;
 				}
@@ -106,17 +116,20 @@ private:
 				x = (x / size_of_rect)*size_of_rect;
 				y = (y / size_of_rect)*size_of_rect;
 			}
+			x = x / size_of_rect;
+			y = y / size_of_rect;
 			int i;
 			/*for (i = 0; i <= index; i++){
 			if (x == coord[i].x && y == coord[i].y)return true;
 			}*/
-			if (x<=size_x && y<=size_y && x>=0 && y>=0)
-				if (a[x / size_of_rect][y / size_of_rect] == 1)return true;
+			if (x <= size_x / size_of_rect && y <= size_y / size_of_rect && x >= 0 && y >= 0)
+				if (a[x][y] == 1)return true;
 			return false;
 		}
 		void ret_coord(int index, int &x, int &y){
-			x = coord[index].x;
-			y = coord[index].y;
+
+			x = coord[index].x * size_of_rect;
+			y = coord[index].y * size_of_rect;
 		}
 		void clear(){
 			std::vector<CPoint> ab;
@@ -135,15 +148,13 @@ private:
 			CPoint temp_cPoint;
 			int ind = 0;
 			for (int i = 0; i <= index; i++){
-				if (coord[i].x < size_x && coord[i].y < size_y){
-					change += change;
-					temp_cPoint.x = coord[i].x - change;
-					temp_cPoint.y = coord[i].y - change;
-					coord1.push_back(temp_cPoint);
+				if (coord[i].x < size_x / size_of_rect && coord[i].y < size_y / size_of_rect){
+
+					coord1.push_back(coord[i]);
 					ind++;
 				}
 				else{
-					a[coord[i].x / size_of_rect][coord[i].y / size_of_rect] = 0;
+					a[coord[i].x][coord[i].y] = 0;
 				}
 			}
 			index = ind - 1;
@@ -274,28 +285,36 @@ private:
 		int change_with_window;
 		int infinite_field;
 		int all_steps;
+		int all_steps_old;
 	};
 	
 public:
 	Workspace();
 	~Workspace();
-	rectMatrix new_t, that, that_old, last_old, last, els;
+	void fToString(int fl, LPWSTR& s);
+	//
+	rectMatrix new_t, that, that_old, last_old, last, els, that_mult;
 	options op;
 	int fast_start_condition;
 	int ers_bkg_param;
 	int scroll_param;
 	int on_scroll_Val;
+	bool fast_start_func_exit;
+	int start_cond;
 	int set_change;
 	int shapes;
 	int l_mouse_ev, r_mouse_ev;
 	int x_for_scroll = 0, y_for_scroll = 0;
 	HANDLE hFieldMutex;
 	HANDLE hRunMutex;
+	CComAutoCriticalSection m_cs;
+	HANDLE eWrite;
+	HANDLE eStop;
 	int stop;
 	CPoint c_clean;
 };
 
 
 
-
 extern Workspace g_Workspace;
+extern Workspace m1;
